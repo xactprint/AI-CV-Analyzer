@@ -279,7 +279,7 @@ export default function Settings() {
                 "Passwords hashed with bcrypt (10 salt rounds)",
                 "CORS locked to the single client origin",
                 "Uploads restricted to PDF, DOCX, PNG and JPG under 10 MB",
-                "MONGODB_URI, JWT_SECRET and XAI_API_KEY stay on the server",
+                "MONGODB_URI, JWT_SECRET and your AI API key stay on the server",
                 "Every query is scoped to your own user id",
               ].map((item) => (
                 <li key={item} className="text-muted-foreground flex gap-2.5">

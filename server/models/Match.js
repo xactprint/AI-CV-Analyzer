@@ -52,7 +52,7 @@ const matchSchema = new mongoose.Schema(
     },
     explanation: { type: String, default: "" },
     recommendations: { type: [String], default: [] },
-    analysisSource: { type: String, enum: ["xai", "heuristic"], default: "xai" },
+    analysisSource: { type: String, enum: ["groq", "xai", "heuristic"], default: "heuristic" },
     durationMs: { type: Number, default: 0 },
   },
   { timestamps: true }

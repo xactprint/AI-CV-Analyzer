@@ -5,7 +5,7 @@ require("dotenv").config();
 
 const connectDB = require("./config/db");
 const { notFound, errorHandler } = require("./middleware/errorHandler");
-const { isConfigured } = require("./services/aiService");
+const { getProviderInfo } = require("./services/aiService");
 
 const authRoutes = require("./routes/authRoutes");
 const resumeRoutes = require("./routes/resumeRoutes");
@@ -43,10 +43,12 @@ app.use((req, res, next) => {
 /* ----------------------------- routes ----------------------------- */
 
 app.get("/api/health", (req, res) => {
+  const { provider, model, label } = getProviderInfo();
   res.json({
     success: true,
     message: "AI CV Analyzer API is running",
-    aiProvider: isConfigured() ? "xAI (Grok)" : "heuristic (XAI_API_KEY not set)",
+    aiProvider: provider === "heuristic" ? label : `${label} (${model})`,
+    aiModel: model || null,
     uptime: Math.round(process.uptime()),
   });
 });
@@ -82,9 +84,14 @@ const start = async () => {
   }
 
   app.listen(PORT, () => {
+    const { provider, model, label } = getProviderInfo();
     console.log(`Server running on http://localhost:${PORT}`);
     console.log(`Allowed client origin: ${CLIENT_URL}`);
-    console.log(`AI provider: ${isConfigured() ? `xAI / ${process.env.XAI_MODEL || "grok-4"}` : "heuristic fallback"}`);
+    console.log(
+      provider === "heuristic"
+        ? `AI provider: heuristic fallback (set GROQ_API_KEY or XAI_API_KEY to enable a model)`
+        : `AI provider: ${label} / ${model}`
+    );
   });
 };
 

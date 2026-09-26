@@ -40,6 +40,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScoreRing } from "@/components/charts/ScoreRing";
 import { ScoreBarChart, SkillRadar } from "@/components/charts/Charts";
 import { BorderBeam } from "@/components/magicui/border-beam";
+import { aiSourceLabel, isAiSource } from "@/lib/utils";
 
 const IMPACT_VARIANT = { high: "destructive", medium: "warning", low: "secondary" };
 
@@ -84,8 +85,8 @@ function ExperienceTimeline({ items = [] }) {
   if (!items.length) {
     return (
       <p className="text-muted-foreground text-sm">
-        No structured experience entries were detected. Running the analysis again with a configured
-        XAI_API_KEY will extract them.
+        No structured experience entries were detected. Running the analysis again with a
+        configured GROQ_API_KEY (or XAI_API_KEY) will extract them.
       </p>
     );
   }
@@ -326,7 +327,7 @@ export default function Analysis() {
     const lines = [
       `CV Analysis — ${resume?.label || resume?.originalName}`,
       `Generated ${formatDate(new Date())}`,
-      `Source: ${analysis.analysisSource === "xai" ? "xAI Grok" : "Built-in heuristic engine"}`,
+      `Source: ${aiSourceLabel(analysis.analysisSource)}`,
       "",
       `OVERALL SCORE: ${analysis.overallScore}%`,
       ...Object.entries(analysis.scoreBreakdown || {}).map(
@@ -401,7 +402,7 @@ export default function Analysis() {
       <>
         <PageHeader
           title={`Analysing ${resume?.label || resume?.originalName}`}
-          description="Grok is reading your document. This usually takes 10–40 seconds."
+          description="The AI model is reading your document. This usually takes 10–40 seconds."
           breadcrumb
         />
         <div className="grid gap-5 lg:grid-cols-3">
@@ -468,7 +469,7 @@ export default function Analysis() {
         title={resume?.label || resume?.originalName}
         description={`Analysed ${formatDate(analysis.createdAt)}${
           analysis.durationMs ? ` in ${(analysis.durationMs / 1000).toFixed(1)}s` : ""
-        } · ${analysis.analysisSource === "xai" ? "Powered by xAI Grok" : "Built-in heuristic engine"}`}
+        } · ${aiSourceLabel(analysis.analysisSource)}`}
         breadcrumb
         actions={
           <>
@@ -489,10 +490,11 @@ export default function Analysis() {
 
       {error && <ErrorState error={error} className="mb-4" />}
 
-      {analysis.analysisSource !== "xai" && (
+      {!isAiSource(analysis.analysisSource) && (
         <InlineNotice type="warning" className="mb-5">
-          This result came from the built-in heuristic engine. Set <code>XAI_API_KEY</code> in the
-          server <code>.env</code> to get full Grok-powered extraction.
+          This result came from the built-in heuristic engine. Set <code>GROQ_API_KEY</code> (or{" "}
+          <code>XAI_API_KEY</code>) in the server <code>.env</code> to get full model-written
+          analysis.
         </InlineNotice>
       )}
 

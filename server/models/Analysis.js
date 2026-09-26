@@ -136,7 +136,7 @@ const analysisSchema = new mongoose.Schema(
       tips: { type: [String], default: [] },
     },
     strengthsHighlight: { type: [String], default: [] },
-    analysisSource: { type: String, enum: ["xai", "heuristic"], default: "xai" },
+    analysisSource: { type: String, enum: ["groq", "xai", "heuristic"], default: "heuristic" },
     durationMs: { type: Number, default: 0 },
   },
   { timestamps: true }

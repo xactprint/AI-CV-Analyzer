@@ -1,7 +1,7 @@
 # Screenshots
 
-Drop the README image captures here using these file names — the root README links to them
-directly:
+Capture the application and save the images in this folder using the file names below, then embed
+them in the root `README.md` (Features / Application pages / Quality checks).
 
 | File                | What it shows                                  |
 | ------------------- | ---------------------------------------------- |

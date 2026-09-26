@@ -9,6 +9,7 @@ import { ScoreRing } from "@/components/charts/ScoreRing";
 import { SkillRadar } from "@/components/charts/Charts";
 import { ExplainMatch } from "@/components/common/StageProgress";
 import { BorderBeam } from "@/components/magicui/border-beam";
+import { aiSourceLabel } from "@/lib/utils";
 
 /**
  * Full match result card. Shared by the Job Matcher and the History detail
@@ -169,7 +170,7 @@ export function MatchResult({ match, onDelete }) {
 
         <p className="text-muted-foreground text-xs">
           Matched {formatDate(match.createdAt)} ·{" "}
-          {match.analysisSource === "xai" ? "Powered by xAI Grok" : "Built-in heuristic engine"}
+          {aiSourceLabel(match.analysisSource)}
         </p>
       </CardContent>
     </Card>

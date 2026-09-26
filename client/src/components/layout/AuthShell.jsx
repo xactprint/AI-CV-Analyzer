@@ -40,7 +40,7 @@ export function AuthShell({ title, subtitle, children, footer }) {
           <dl className="mt-10 grid max-w-md grid-cols-2 gap-6">
             {[
               ["Extraction", "Text + OCR"],
-              ["Analysis", "Grok-powered"],
+              ["Analysis", "Model-written"],
               ["Scoring", "5 dimensions"],
               ["Matching", "Skill-level gaps"],
             ].map(([k, v]) => (

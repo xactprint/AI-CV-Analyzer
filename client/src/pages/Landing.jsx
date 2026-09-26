@@ -64,7 +64,7 @@ const FEATURES = [
 
 const STEPS = [
   { step: "01", title: "Upload your CV", body: "Drag in a PDF, DOCX or image. We extract the text, with OCR for scans." },
-  { step: "02", title: "Let the AI read it", body: "Grok extracts your profile, skills, experience, education and projects." },
+  { step: "02", title: "Let the AI read it", body: "The model extracts your profile, skills, experience, education and projects." },
   { step: "03", title: "Read your score", body: "Get an overall score, a category breakdown and a prioritised action list." },
   { step: "04", title: "Match a job", body: "Paste a job description, see your match score and the skills you are missing." },
 ];
@@ -75,7 +75,7 @@ const TECH = [
   { icon: Bot, name: "Express 5", note: "REST API" },
   { icon: FileText, name: "MongoDB", note: "Mongoose ODM" },
   { icon: ShieldCheck, name: "JWT + bcrypt", note: "Auth & security" },
-  { icon: BriefcaseBusiness, name: "xAI / Grok", note: "AI analysis" },
+  { icon: BriefcaseBusiness, name: "Groq / xAI", note: "AI analysis" },
 ];
 
 const DEMO_SKILLS = [
@@ -141,7 +141,7 @@ function Hero() {
         >
           <Badge variant="secondary" className="mb-6 gap-1.5 px-3 py-1">
             <Sparkles className="size-3" />
-            Powered by xAI Grok
+            Powered by Groq or xAI
           </Badge>
 
           <h1 className="text-4xl font-semibold tracking-tight sm:text-6xl">

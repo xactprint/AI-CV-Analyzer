@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { useTheme } from "next-themes";
+import { aiSourceLabel, isAiSource } from "@/lib/utils";
 
 const MAX_SIZE = 10 * 1024 * 1024;
 const ACCEPT = [".pdf", ".docx", ".png", ".jpg", ".jpeg"];
@@ -187,7 +188,7 @@ export default function UploadCv() {
       <>
         <PageHeader
           title="Analysing your CV"
-          description="Grok is reading the document and building your profile. This can take 10–40 seconds."
+          description="The AI model is reading the document and building your profile. This can take 10–40 seconds."
         />
         <div className="grid gap-5 lg:grid-cols-3">
           <div className="lg:col-span-2">
@@ -240,9 +241,9 @@ export default function UploadCv() {
                 {result.resume.label} scored {result.analysis.overallScore}%
               </p>
               <p className="text-muted-foreground mt-1 text-sm">
-                {result.analysis.analysisSource === "xai"
-                  ? `Analysed with Grok in ${Math.round((result.analysis.durationMs || 0) / 1000)}s.`
-                  : "Analysed with the built-in heuristic engine (no XAI_API_KEY configured)."}
+                {isAiSource(result.analysis.analysisSource)
+                  ? `Analysed with ${aiSourceLabel(result.analysis.analysisSource)} in ${Math.round((result.analysis.durationMs || 0) / 1000)}s.`
+                  : "Analysed with the built-in heuristic engine (no AI API key configured)."}
               </p>
             </div>
             <div className="flex flex-wrap justify-center gap-2">
@@ -384,7 +385,7 @@ export default function UploadCv() {
                 {[
                   "Your file is uploaded and stored privately on the server.",
                   "Text is extracted. Images and scans go through OCR.",
-                  "Grok extracts your profile, skills, experience and education.",
+                  "The model extracts your profile, skills, experience and education.",
                   "You get a score, a breakdown and prioritised recommendations.",
                 ].map((step, i) => (
                   <li key={i} className="flex gap-3 text-sm">

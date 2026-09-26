@@ -3,9 +3,34 @@ const ApiError = require("../utils/ApiError");
 const { parseJson, asStringArray, clampScore } = require("../utils/json");
 const { extractResumeInformation } = require("./extractionService");
 
-const XAI_BASE_URL = "https://api.x.ai/v1";
-const DEFAULT_MODEL = "grok-4";
 const MAX_TOKENS = 8000;
+
+/**
+ * Supported providers. Both expose an OpenAI-compatible
+ * `/chat/completions` endpoint, so only the base URL, the default model
+ * and the environment variable names differ.
+ */
+const PROVIDERS = {
+  groq: {
+    id: "groq",
+    label: "Groq",
+    baseUrl: "https://api.groq.com/openai/v1",
+    defaultModel: "openai/gpt-oss-120b",
+    keyEnv: "GROQ_API_KEY",
+    modelEnv: "GROQ_MODEL",
+  },
+  xai: {
+    id: "xai",
+    label: "xAI (Grok)",
+    baseUrl: "https://api.x.ai/v1",
+    defaultModel: "grok-4",
+    keyEnv: "XAI_API_KEY",
+    modelEnv: "XAI_MODEL",
+  },
+};
+
+// Checked in this order when AI_PROVIDER is "auto".
+const PROVIDER_ORDER = ["groq", "xai"];
 
 /* ------------------------------------------------------------------ *
  * HTTP transport
@@ -17,20 +42,51 @@ const MAX_TOKENS = 8000;
 const PLACEHOLDER_KEY = /^(your[_-]|changeme|replace[_-]|xxx+$)/i;
 
 const getConfig = () => {
-  const raw = (process.env.XAI_API_KEY || "").trim();
-  const apiKey = raw && !PLACEHOLDER_KEY.test(raw) ? raw : "";
-  const model = process.env.XAI_MODEL || DEFAULT_MODEL;
-  return { apiKey, model };
+  const requested = (process.env.AI_PROVIDER || "auto").trim().toLowerCase();
+  const order =
+    requested !== "auto" && PROVIDERS[requested] ? [requested] : PROVIDER_ORDER;
+
+  for (const id of order) {
+    const provider = PROVIDERS[id];
+    const raw = (process.env[provider.keyEnv] || "").trim();
+    if (raw && !PLACEHOLDER_KEY.test(raw)) {
+      return {
+        provider: provider.id,
+        apiKey: raw,
+        model: (process.env[provider.modelEnv] || "").trim() || provider.defaultModel,
+        baseUrl: provider.baseUrl,
+        label: provider.label,
+        keyEnv: provider.keyEnv,
+        modelEnv: provider.modelEnv,
+      };
+    }
+  }
+
+  return {
+    provider: "heuristic",
+    apiKey: "",
+    model: "",
+    baseUrl: "",
+    label: `heuristic (no API key set)`,
+    keyEnv: "GROQ_API_KEY / XAI_API_KEY",
+    modelEnv: "",
+  };
 };
 
-const isConfigured = () => Boolean(getConfig().apiKey);
+const isConfigured = () => getConfig().provider !== "heuristic";
+
+/** Provider details for the health endpoint and the startup banner. */
+const getProviderInfo = () => {
+  const { provider, model, label } = getConfig();
+  return { provider, model, label };
+};
 
 /**
- * Single chat-completion call to the xAI (Grok) API.
+ * Single chat-completion call to the configured provider (Groq or xAI).
  * Always asks for a JSON object back.
  */
-const callXai = async ({ system, prompt, maxTokens = MAX_TOKENS }) => {
-  const { apiKey, model } = getConfig();
+const callModel = async ({ system, prompt, maxTokens = MAX_TOKENS }) => {
+  const { apiKey, model, baseUrl, label, keyEnv, modelEnv } = getConfig();
 
   const payload = {
     model,
@@ -45,7 +101,7 @@ const callXai = async ({ system, prompt, maxTokens = MAX_TOKENS }) => {
 
   try {
     const { data } = await axios.post(
-      `${XAI_BASE_URL}/chat/completions`,
+      `${baseUrl}/chat/completions`,
       payload,
       {
         headers: {
@@ -58,7 +114,7 @@ const callXai = async ({ system, prompt, maxTokens = MAX_TOKENS }) => {
 
     const content = data?.choices?.[0]?.message?.content;
     if (!content) {
-      throw new Error("The AI provider returned an empty response.");
+      throw new Error(`${label} returned an empty response.`);
     }
     return parseJson(content);
   } catch (err) {
@@ -67,13 +123,17 @@ const callXai = async ({ system, prompt, maxTokens = MAX_TOKENS }) => {
     if (err.response) {
       const status = err.response.status;
       if (status === 401 || status === 403) {
-        throw ApiError.badGateway("The AI service rejected our API key. Check XAI_API_KEY on the server.");
+        throw ApiError.badGateway(
+          `The AI service rejected our API key. Check ${keyEnv} on the server.`
+        );
       }
       if (status === 429) {
         throw ApiError.badGateway("The AI service is rate limiting requests. Please try again in a moment.");
       }
       if (status === 404) {
-        throw ApiError.badGateway(`The AI model "${getConfig().model}" was not found. Set a valid XAI_MODEL on the server.`);
+        throw ApiError.badGateway(
+          `The AI model "${model}" was not found on ${label}. Set a valid ${modelEnv} on the server.`
+        );
       }
       throw ApiError.badGateway(`The AI service returned an error (${status}). Please try again.`);
     }
@@ -83,7 +143,7 @@ const callXai = async ({ system, prompt, maxTokens = MAX_TOKENS }) => {
     }
 
     throw ApiError.badGateway(
-      "We could not reach the AI service. Check your internet connection or XAI_API_KEY."
+      `We could not reach the AI service. Check your internet connection or ${keyEnv}.`
     );
   }
 };
@@ -292,7 +352,7 @@ const normaliseRecommendations = (raw) =>
     .slice(0, 8);
 
 /* ------------------------------------------------------------------ *
- * Heuristic fallback (used when no XAI_API_KEY is configured)
+ * Heuristic fallback (used when no AI API key is configured)
  * ------------------------------------------------------------------ */
 
 const SKILL_DICTIONARY = {
@@ -756,7 +816,7 @@ const guessLocation = (lines) => {
 };
 
 /**
- * Deterministic, non-AI analysis used when XAI_API_KEY is not set, so the
+ * Deterministic, non-AI analysis used when no AI API key is set, so the
  * product still demonstrates the full pipeline end to end.
  */
 const heuristicResumeAnalysis = (resumeText) => {
@@ -902,7 +962,7 @@ const heuristicResumeAnalysis = (resumeText) => {
   });
 
   return {
-    summary: `This resume was analysed locally (no XAI_API_KEY configured). It contains ${words.length} words, ${technical.length} recognisable technologies and an estimated ${overallScore}% overall quality.${foundSections.length ? ` Parsed ${foundSections.join(", ")} from the document structure.` : ""} Configure XAI_API_KEY on the server to switch to full Grok-powered analysis.`,
+    summary: `This resume was analysed locally (no AI API key configured). It contains ${words.length} words, ${technical.length} recognisable technologies and an estimated ${overallScore}% overall quality.${foundSections.length ? ` Parsed ${foundSections.join(", ")} from the document structure.` : ""} Configure GROQ_API_KEY (or XAI_API_KEY) on the server to switch to model-written analysis.`,
     profile: {
       fullName: nameLine,
       email: emailMatch ? emailMatch[0] : "",
@@ -1000,7 +1060,7 @@ const heuristicMatch = ({ resumeText, job }) => {
     matchingProjects: hasProjects ? ["Projects section present"] : [],
     matchingKeywords: matchingSkills.slice(0, 10),
     missingKeywords: missingSkills.slice(0, 10),
-    explanation: `This match was calculated locally (no XAI_API_KEY configured). You match ${matchingSkills.length} of the ${jobSkills.length} technologies detected in the job description. ${missingSkills.length ? `The main gaps are ${missingSkills.slice(0, 3).join(", ")}.` : "No major technology gaps were detected."}`,
+    explanation: `This match was calculated locally (no AI API key configured). You match ${matchingSkills.length} of the ${jobSkills.length} technologies detected in the job description. ${missingSkills.length ? `The main gaps are ${missingSkills.slice(0, 3).join(", ")}.` : "No major technology gaps were detected."}`,
     recommendations: missingSkills.length
       ? [
           `Add concrete evidence of ${missingSkills.slice(0, 2).join(" and ")} to your experience or projects.`,
@@ -1020,7 +1080,7 @@ const extractText = extractResumeInformation;
 
 /**
  * Turns a resume text blob into the full structured analysis payload.
- * Uses xAI when XAI_API_KEY is present, otherwise a local heuristic pass.
+ * Uses the configured provider (Groq or xAI) when a key is present, otherwise a local heuristic pass.
  */
 const analyzeResume = async (resumeText) => {
   if (!resumeText || resumeText.trim().length < 20) {
@@ -1033,7 +1093,7 @@ const analyzeResume = async (resumeText) => {
     return { ...heuristicResumeAnalysis(resumeText), analysisSource: "heuristic" };
   }
 
-  const raw = await callXai({ system: RESUME_SYSTEM_PROMPT, prompt: resumePrompt(resumeText) });
+  const raw = await callModel({ system: RESUME_SYSTEM_PROMPT, prompt: resumePrompt(resumeText) });
 
   const scoreBreakdown = {
     skills: clampScore(raw?.scoreBreakdown?.skills, 0),
@@ -1069,7 +1129,7 @@ const analyzeResume = async (resumeText) => {
     scoreBreakdown,
     recommendations: normaliseRecommendations(raw?.recommendations),
     overallScore: clampScore(raw?.overallScore, 0),
-    analysisSource: "xai",
+    analysisSource: getConfig().provider,
   };
 };
 
@@ -1117,7 +1177,7 @@ const matchResumeWithJob = async ({ resumeText, job }) => {
     return { ...heuristicMatch({ resumeText, job }), analysisSource: "heuristic" };
   }
 
-  const raw = await callXai({
+  const raw = await callModel({
     system: matchSystemPrompt,
     prompt: matchPrompt({ resumeText, job }),
   });
@@ -1144,7 +1204,7 @@ const matchResumeWithJob = async ({ resumeText, job }) => {
     missingKeywords: asStringArray(raw?.missingKeywords),
     explanation: normaliseText(raw?.explanation),
     recommendations: asStringArray(raw?.recommendations),
-    analysisSource: "xai",
+    analysisSource: getConfig().provider,
   };
 };
 
@@ -1165,7 +1225,7 @@ const improveResume = async ({ resumeText, weaknesses = [] }) => {
 
     return {
       summary:
-        "AI rewrite suggestions are unavailable because XAI_API_KEY is not configured on the server. The tips below are the same rules the model applies.",
+        "AI rewrite suggestions are unavailable because no AI API key is configured on the server. The tips below are the same rules the model applies.",
       original: original.slice(0, 400),
       rewritten: original
         ? `Rewrite "${original.slice(0, 140)}" so it starts with a strong action verb, names the technology used, and ends with a measurable result (for example "cut load time by 35%"). Keep one idea per line.`
@@ -1173,13 +1233,13 @@ const improveResume = async ({ resumeText, weaknesses = [] }) => {
       tips: [
         ...weaknesses.map((w) => `Fix this weakness: ${cleanSegment(w)}`),
         ...(quantified ? [] : ["Add numbers everywhere: percentages, users, revenue, time saved."]),
-        "Configure XAI_API_KEY in server/.env to unlock model-written rewrites.",
+        "Configure GROQ_API_KEY (or XAI_API_KEY) in server/.env to unlock model-written rewrites.",
       ].slice(0, 6),
       analysisSource: "heuristic",
     };
   }
 
-  const raw = await callXai({
+  const raw = await callModel({
     system: improveSystemPrompt,
     prompt: improvePrompt(resumeText, weaknesses.length ? weaknesses : ["Vague professional summary"]),
     maxTokens: 2000,
@@ -1190,7 +1250,7 @@ const improveResume = async ({ resumeText, weaknesses = [] }) => {
     original: normaliseText(raw?.original),
     rewritten: normaliseText(raw?.rewritten),
     tips: asStringArray(raw?.tips),
-    analysisSource: "xai",
+    analysisSource: getConfig().provider,
   };
 };
 
@@ -1202,4 +1262,5 @@ module.exports = {
   matchResumeWithJob,
   improveResume,
   isConfigured,
+  getProviderInfo,
 };
